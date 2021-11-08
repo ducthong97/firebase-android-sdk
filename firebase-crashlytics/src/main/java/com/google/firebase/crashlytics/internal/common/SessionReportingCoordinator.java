@@ -66,7 +66,7 @@ public class SessionReportingCoordinator implements CrashlyticsLifecycleEvents {
       UserMetadata userMetadata,
       StackTraceTrimmingStrategy stackTraceTrimmingStrategy,
       SettingsDataProvider settingsProvider) {
-    final File rootFilesDirectory = new File(fileStore.getFilesDirPath());
+    final File rootFilesDirectory = fileStore.getFilesDir();
     final CrashlyticsReportDataCapture dataCapture =
         new CrashlyticsReportDataCapture(context, idManager, appData, stackTraceTrimmingStrategy);
     final CrashlyticsReportPersistence reportPersistence =

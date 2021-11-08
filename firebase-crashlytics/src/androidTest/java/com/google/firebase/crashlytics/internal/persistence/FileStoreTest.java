@@ -14,30 +14,24 @@
 
 package com.google.firebase.crashlytics.internal.persistence;
 
-import android.os.Environment;
 import com.google.firebase.crashlytics.internal.CrashlyticsTestCase;
 import java.io.File;
 
-public class FileStoreImplTest extends CrashlyticsTestCase {
-  FileStoreImpl fileStore;
+public class FileStoreTest extends CrashlyticsTestCase {
+  FileStore fileStore;
 
   @Override
   protected void setUp() throws Exception {
     super.setUp();
-    fileStore = new FileStoreImpl(getContext());
+    fileStore = new FileStore(getContext());
   }
 
   public void testGetFilesDir() {
-    verifyFile(fileStore.getFilesDir());
+    verifyFile(fileStore.getCrashlyticsRootDir());
   }
 
   public void testPrepare() {
-    verifyFile(fileStore.prepare(new File(getContext().getFilesDir(), "FileStoreImplTest/")));
-  }
-
-  public void testisExternalStorageAvailable() {
-    final String state = Environment.getExternalStorageState();
-    assertEquals(Environment.MEDIA_MOUNTED.equals(state), fileStore.isExternalStorageAvailable());
+    verifyFile(fileStore.prepare(new File(getContext().getFilesDir(), "FileStoreTest/")));
   }
 
   private void verifyFile(File file) {

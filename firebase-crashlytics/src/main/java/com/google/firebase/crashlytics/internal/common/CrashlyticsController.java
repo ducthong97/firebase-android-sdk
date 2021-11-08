@@ -77,7 +77,6 @@ class CrashlyticsController {
 
   private final AppData appData;
 
-  private final LogFileManager.DirectoryProvider logFileDirectoryProvider;
   private final LogFileManager logFileManager;
   private final CrashlyticsNativeComponent nativeComponent;
   private final AnalyticsEventLogger analyticsEventLogger;
@@ -111,7 +110,6 @@ class CrashlyticsController {
       AppData appData,
       UserMetadata userMetadata,
       LogFileManager logFileManager,
-      LogFileManager.DirectoryProvider logFileDirectoryProvider,
       SessionReportingCoordinator sessionReportingCoordinator,
       CrashlyticsNativeComponent nativeComponent,
       AnalyticsEventLogger analyticsEventLogger) {
@@ -124,7 +122,6 @@ class CrashlyticsController {
     this.appData = appData;
     this.userMetadata = userMetadata;
     this.logFileManager = logFileManager;
-    this.logFileDirectoryProvider = logFileDirectoryProvider;
     this.nativeComponent = nativeComponent;
     this.analyticsEventLogger = analyticsEventLogger;
 
@@ -476,7 +473,7 @@ class CrashlyticsController {
               return null;
             }
             reportingCoordinator.persistUserId(currentSessionId);
-            new MetaDataStore(getFilesDir()).writeUserData(currentSessionId, userMetaData);
+            new MetaDataStore(fileStore).writeUserData(currentSessionId, userMetaData);
             return null;
           }
         });
@@ -495,7 +492,7 @@ class CrashlyticsController {
           @Override
           public Void call() throws Exception {
             final String currentSessionId = getCurrentSessionId();
-            new MetaDataStore(getFilesDir()).writeKeyData(currentSessionId, keyData, isInternal);
+            new MetaDataStore(fileStore).writeKeyData(currentSessionId, keyData, isInternal);
             return null;
           }
         });
@@ -667,7 +664,7 @@ class CrashlyticsController {
     final long eventTime = minidumpFile.lastModified();
 
     final LogFileManager previousSessionLogManager =
-        new LogFileManager(context, logFileDirectoryProvider, previousSessionId);
+        new LogFileManager(fileStore, previousSessionId);
     final File nativeSessionDirectory = new File(getNativeSessionFilesDir(), previousSessionId);
 
     if (!nativeSessionDirectory.mkdirs()) {
@@ -680,7 +677,7 @@ class CrashlyticsController {
         getNativeSessionFiles(
             nativeSessionFileProvider,
             previousSessionId,
-            getFilesDir(),
+            fileStore,
             previousSessionLogManager.getBytesForLog());
     NativeSessionFileGzipper.processNativeSessions(nativeSessionDirectory, nativeSessionFiles);
     reportingCoordinator.finalizeSessionWithNativeEvent(previousSessionId, nativeSessionFiles);
@@ -826,10 +823,10 @@ class CrashlyticsController {
   static List<NativeSessionFile> getNativeSessionFiles(
       NativeSessionFileProvider fileProvider,
       String previousSessionId,
-      File filesDir,
+      FileStore fileStore,
       byte[] logBytes) {
 
-    final MetaDataStore metaDataStore = new MetaDataStore(filesDir);
+    final MetaDataStore metaDataStore = new MetaDataStore(fileStore);
     final File userFile = metaDataStore.getUserDataFileForSession(previousSessionId);
     final File keysFile = metaDataStore.getKeysFileForSession(previousSessionId);
 
@@ -872,10 +869,9 @@ class CrashlyticsController {
       // Passes the latest applicationExitInfo to ReportCoordinator, which persists it if it
       // happened during the session.
       if (applicationExitInfoList.size() != 0) {
-        final LogFileManager relevantSessionLogManager =
-            new LogFileManager(context, logFileDirectoryProvider, sessionId);
+        final LogFileManager relevantSessionLogManager = new LogFileManager(fileStore, sessionId);
         final UserMetadata relevantUserMetadata = new UserMetadata();
-        relevantUserMetadata.setCustomKeys(new MetaDataStore(getFilesDir()).readKeyData(sessionId));
+        relevantUserMetadata.setCustomKeys(new MetaDataStore(fileStore).readKeyData(sessionId));
         reportingCoordinator.persistRelevantAppExitInfoEvent(
             sessionId, applicationExitInfoList, relevantSessionLogManager, relevantUserMetadata);
       } else {

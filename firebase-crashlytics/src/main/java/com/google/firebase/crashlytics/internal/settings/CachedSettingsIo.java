@@ -17,7 +17,7 @@ package com.google.firebase.crashlytics.internal.settings;
 import android.content.Context;
 import com.google.firebase.crashlytics.internal.Logger;
 import com.google.firebase.crashlytics.internal.common.CommonUtils;
-import com.google.firebase.crashlytics.internal.persistence.FileStoreImpl;
+import com.google.firebase.crashlytics.internal.persistence.FileStore;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
@@ -37,7 +37,7 @@ public class CachedSettingsIo {
   }
 
   private File getSettingsFile() {
-    return new File(new FileStoreImpl(context).getFilesDir(), SETTINGS_CACHE_FILENAME);
+    return new File(new FileStore(context).getFilesDir(), SETTINGS_CACHE_FILENAME);
   }
 
   /**
