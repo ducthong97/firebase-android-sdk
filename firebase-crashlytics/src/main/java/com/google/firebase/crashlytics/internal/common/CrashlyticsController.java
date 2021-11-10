@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.SortedSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -101,7 +102,7 @@ class CrashlyticsController {
   final AtomicBoolean checkForUnsentReportsCalled = new AtomicBoolean(false);
 
   CrashlyticsController(
-      final Context context,
+      Context context,
       CrashlyticsBackgroundWorker backgroundWorker,
       IdManager idManager,
       DataCollectionArbiter dataCollectionArbiter,
@@ -522,8 +523,8 @@ class CrashlyticsController {
    */
   @Nullable
   private String getCurrentSessionId() {
-    final List<String> sortedOpenSessions = reportingCoordinator.listSortedOpenSessionIds();
-    return (!sortedOpenSessions.isEmpty()) ? sortedOpenSessions.get(0) : null;
+    final SortedSet<String> sortedOpenSessions = reportingCoordinator.listSortedOpenSessionIds();
+    return (!sortedOpenSessions.isEmpty()) ? sortedOpenSessions.first() : null;
   }
 
   /**
@@ -595,14 +596,15 @@ class CrashlyticsController {
       boolean skipCurrentSession, SettingsDataProvider settingsDataProvider) {
     final int offset = skipCurrentSession ? 1 : 0;
 
-    List<String> sortedOpenSessions = reportingCoordinator.listSortedOpenSessionIds();
+    // :TODO HW2021 this implementation can be cleaned up.
+    String[] sortedOpenSessions = reportingCoordinator.listSortedOpenSessionIds().toArray(new String[0]);
 
-    if (sortedOpenSessions.size() <= offset) {
+    if (sortedOpenSessions.length <= offset) {
       Logger.getLogger().v("No open sessions to be closed.");
       return;
     }
 
-    final String mostRecentSessionIdToClose = sortedOpenSessions.get(offset);
+    final String mostRecentSessionIdToClose = sortedOpenSessions[offset];
 
     if (settingsDataProvider.getSettings().getFeaturesData().collectAnrs) {
       writeApplicationExitInfoEventIfRelevant(mostRecentSessionIdToClose);
@@ -619,7 +621,7 @@ class CrashlyticsController {
 
     String currentSessionId = null;
     if (skipCurrentSession) {
-      currentSessionId = sortedOpenSessions.get(0);
+      currentSessionId = sortedOpenSessions[0];
     }
 
     reportingCoordinator.finalizeSessions(getCurrentTimestampSeconds(), currentSessionId);
@@ -627,29 +629,9 @@ class CrashlyticsController {
 
   // endregion
 
-  // region File management
-
-  File[] listNativeSessionFileDirectories() {
-    return ensureFileArrayNotNull(getNativeSessionFilesDir().listFiles());
+  List<File> listAppExceptionMarkerFiles() {
+    return fileStore.getCommonFiles(APP_EXCEPTION_MARKER_FILTER);
   }
-
-  File[] listAppExceptionMarkerFiles() {
-    return listFilesMatching(APP_EXCEPTION_MARKER_FILTER);
-  }
-
-  private File[] listFilesMatching(FilenameFilter filter) {
-    return listFilesMatching(getFilesDir(), filter);
-  }
-
-  private static File[] listFilesMatching(File directory, FilenameFilter filter) {
-    return ensureFileArrayNotNull(directory.listFiles(filter));
-  }
-
-  private static File[] ensureFileArrayNotNull(File[] files) {
-    return (files == null) ? new File[] {} : files;
-  }
-
-  // endregion
 
   private void finalizePreviousNativeSession(String previousSessionId) {
     Logger.getLogger().v("Finalizing native report for session " + previousSessionId);
@@ -665,7 +647,8 @@ class CrashlyticsController {
 
     final LogFileManager previousSessionLogManager =
         new LogFileManager(fileStore, previousSessionId);
-    final File nativeSessionDirectory = new File(getNativeSessionFilesDir(), previousSessionId);
+    // :TODO HW2021 decide permanent strategy for where native session files go and how to access. */
+    final File nativeSessionDirectory = fileStore.getSessionFile(previousSessionId, "native");
 
     if (!nativeSessionDirectory.mkdirs()) {
       Logger.getLogger().w("Couldn't create directory to store native session files, aborting.");
@@ -696,7 +679,7 @@ class CrashlyticsController {
 
   private void doWriteAppExceptionMarker(long eventTime) {
     try {
-      new File(getFilesDir(), APP_EXCEPTION_MARKER_PREFIX + eventTime).createNewFile();
+      fileStore.getCommonFile(APP_EXCEPTION_MARKER_PREFIX + eventTime).createNewFile();
     } catch (IOException e) {
       Logger.getLogger().w("Could not create app exception marker file.", e);
     }
@@ -746,12 +729,8 @@ class CrashlyticsController {
     return crashHandler != null && crashHandler.isHandlingException();
   }
 
-  File getFilesDir() {
-    return fileStore.getFilesDir();
-  }
-
-  File getNativeSessionFilesDir() {
-    return new File(getFilesDir(), NATIVE_SESSION_DIR);
+  FileStore getFileStore() {
+    return fileStore;
   }
 
   /**
@@ -760,9 +739,9 @@ class CrashlyticsController {
    * will not be lost.
    */
   private Task<Void> logAnalyticsAppExceptionEvents() {
-    final List<Task<Void>> events = new ArrayList<>();
+    List<Task<Void>> events = new ArrayList<>();
 
-    final File[] appExceptionMarkers = listAppExceptionMarkerFiles();
+    List<File> appExceptionMarkers = listAppExceptionMarkerFiles();
     for (File markerFile : appExceptionMarkers) {
       try {
         final long timestamp =
@@ -801,10 +780,7 @@ class CrashlyticsController {
         });
   }
 
-  private static void deleteFiles(File[] files) {
-    if (files == null) {
-      return;
-    }
+  private static void deleteFiles(List<File> files) {
     for (File file : files) {
       file.delete();
     }
